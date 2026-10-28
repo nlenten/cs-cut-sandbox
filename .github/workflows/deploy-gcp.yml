@@ -1,0 +1,14 @@
+name: Deploy GCP staging
+on:
+  push:
+    branches: [runnable]
+  workflow_dispatch:
+    inputs:
+      ref:
+        required: false
+        default: ""
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "staging deploys ${{ github.sha }}"
