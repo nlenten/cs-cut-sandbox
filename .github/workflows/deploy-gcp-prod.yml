@@ -1,0 +1,38 @@
+name: Deploy GCP prod
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        required: false
+        default: ""
+      ref:
+        required: false
+        default: ""
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  deploy-prod:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.sha || github.event.inputs.ref || github.ref }}
+      - name: A release ships exactly the cut runnable holds
+        if: github.event.inputs.sha != ''
+        env:
+          SHA: ${{ github.event.inputs.sha }}
+        run: |
+          [[ "$GITHUB_REF" == refs/heads/runnable ]] || { echo "::error::a release deploys from runnable (dispatched on $GITHUB_REF)"; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "$SHA" ]] || { echo "::error::checked out $(git rev-parse HEAD), not the cut $SHA"; exit 1; }
+      - run: echo deployed
+      - name: Record the release
+        if: always() && github.event.inputs.sha != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.inputs.sha }}
+          OUTCOME: ${{ job.status }}
+        run: |
+          if [[ "$OUTCOME" == success ]]; then STATE=success; DESC="In prod"; else STATE=failure; DESC="The prod deploy failed: not shipped"; fi
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" -f state="$STATE" -f context=release-cut/prod \
+            -f description="$DESC" -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
